@@ -34,7 +34,7 @@ This project implements a basic Electronic Data Capture (EDC) system for process
 1.  **Clone the repository:**
 
     ```bash
-    git clone <repository_url>
+    git clone https://github.com/snowblow07/edcpy.git
     cd <repository_directory>
     ```
 
@@ -51,7 +51,7 @@ This project implements a basic Electronic Data Capture (EDC) system for process
 4.  **Run the script:**
 
     ```bash
-    python <your_script_name>.py
+    python unitest.py
     ```
 
 5.  **Interact with the system:**
