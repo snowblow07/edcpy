@@ -4,12 +4,12 @@ import json
 import requests  # For making API calls
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)Message')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 class Transaction:
     """Represents a financial transaction."""
 
-    def __init__(self, amount, currency, card_number, expiry_date, cvv, customer_id=None, transaction_id=None, status="Pending", processor_response=None, original_transaction_id=None):
+    def __init__(self, amount, currency, card_number, expiry_date, cvv, customer_id=None, transaction_id=None, status="Pending", processor_response=None, original_transaction_id=None, var_sheet=None):
         """
         Initializes a Transaction object.
 
@@ -24,6 +24,7 @@ class Transaction:
             status (str, optional): The transaction status. Defaults to "Pending".
             processor_response (dict, optional): The processor's response.
             original_transaction_id (str, optional): The ID of the original transaction for re-authorizations.
+            var_sheet (dict, optional): Value-Added Reseller (VAR) sheet parameters.
         """
         self.timestamp = datetime.datetime.now()
         self.amount = amount
@@ -36,6 +37,7 @@ class Transaction:
         self.status = status
         self.processor_response = processor_response
         self.original_transaction_id = original_transaction_id
+        self.var_sheet = var_sheet or {}  # Store VAR sheet parameters
 
     def _mask_card_number(self, card_number):
         """Masks the card number for security."""
@@ -58,6 +60,7 @@ class Transaction:
             "status": self.status,
             "processor_response": self.processor_response,
             "original_transaction_id": self.original_transaction_id,
+            "var_sheet": self.var_sheet,
         }
 
     def copy(self):
@@ -72,7 +75,8 @@ class Transaction:
             self.transaction_id,
             self.status,
             self.processor_response,
-            self.original_transaction_id
+            self.original_transaction_id,
+            self.var_sheet.copy() if self.var_sheet else None, # Copy VAR sheet if it exists
         )
 
 class PaymentProcessor:
@@ -107,7 +111,8 @@ class TSYSProcessor(PaymentProcessor):
             "card_number": transaction.card_number.replace("X", ""),  # Unmask for processing (handle securely!)
             "expiry_date": transaction.expiry_date,
             "cvv": "***",  # In a real system, this would be handled very carefully and not logged
-            "transaction_id": transaction.transaction_id
+            "transaction_id": transaction.transaction_id,
+            "var_sheet": transaction.var_sheet,  # Include VAR sheet data
             # Add other TSYS specific fields as needed
         }
         headers = {
@@ -115,7 +120,6 @@ class TSYSProcessor(PaymentProcessor):
             "Content-Type": "application/json"
         }
         try:
-            # In a real application, use proper error handling and security measures
             response = requests.post(self.api_url, headers=headers, json=payload)
             response.raise_for_status()  # Raise an exception for bad status codes
             transaction.status = "Approved"
@@ -133,6 +137,7 @@ class TSYSProcessor(PaymentProcessor):
         payload = {
             "original_transaction_id": transaction.transaction_id,
             "amount": new_amount,
+            "var_sheet": transaction.var_sheet, #Include VAR sheet data
             # Add other TSYS specific fields as needed
         }
         headers = {
@@ -156,6 +161,7 @@ class TSYSProcessor(PaymentProcessor):
         logging.info(f"Attempting to post-authorize transaction {transaction.transaction_id} with TSYS")
         payload = {
             "original_transaction_id": transaction.transaction_id,
+            "var_sheet": transaction.var_sheet, # Include VAR sheet data
             # Add other TSYS specific fields as needed
         }
         headers = {
@@ -193,11 +199,11 @@ class AnotherPlatformProcessor(PaymentProcessor):
                 "expiry": transaction.expiry_date,
                 "cvv": "***"  # Handle securely
             },
-            "reference_id": transaction.transaction_id
+            "reference_id": transaction.transaction_id,
+            "var_sheet": transaction.var_sheet, #Include VAR sheet data
             # Add other platform specific fields
         }
         try:
-            # Implement authentication based on the platform's requirements
             auth = requests.auth.HTTPBasicAuth(self.credentials['username'], self.credentials['password'])
             response = requests.post(self.api_endpoint, json=data, auth=auth)
             response.raise_for_status()
@@ -209,12 +215,14 @@ class AnotherPlatformProcessor(PaymentProcessor):
             transaction.processor_response = {"error": str(e)}
             logging.error(f"Error processing transaction {transaction.transaction_id} with Another Platform: {e}")
         return transaction
+
     def reauthorize_payment(self, transaction, new_amount):
         """Re-authorizes a payment with a new amount with Another Platform."""
         logging.info(f"Attempting to re-authorize transaction {transaction.transaction_id} with Another Platform for new amount: {new_amount}")
         data = {
             "original_reference_id": transaction.transaction_id,
             "order_total": new_amount,
+            "var_sheet": transaction.var_sheet, #Include VAR sheet data
             # Add other platform specific fields
         }
         try:
@@ -235,6 +243,7 @@ class AnotherPlatformProcessor(PaymentProcessor):
         logging.info(f"Attempting to post-authorize transaction {transaction.transaction_id} with Another Platform")
         data = {
             "original_reference_id": transaction.transaction_id,
+            "var_sheet": transaction.var_sheet, #Include VAR sheet data
             # Add other platform specific fields
         }
         try:
@@ -249,6 +258,7 @@ class AnotherPlatformProcessor(PaymentProcessor):
             transaction.processor_response = {"error": str(e)}
             logging.error(f"Error capturing transaction {transaction.transaction_id} with Another Platform: {e}")
         return transaction
+
 class EDCSystem:
     """Electronic Data Capture (EDC) system."""
 
@@ -273,7 +283,21 @@ class EDCSystem:
         expiry_date = input("Enter expiry date (MM/YY): ")
         cvv = input("Enter CVV: ")
         customer_id = input("Enter optional customer ID: ")
-        return Transaction(amount, currency, card_number, expiry_date, cvv, customer_id)
+
+        # Capture VAR sheet parameters
+        var_sheet = {
+            "merchant_number": input("Enter Merchant Number (MID): "),
+            "acquirer_bin": input("Enter Acquirer BIN: "),
+            "store_number": input("Enter Store Number: "),
+            "terminal_number": input("Enter Terminal Number: "),
+            "mcc": input("Enter Merchant Category Code (MCC): "),
+            "location_number": input("Enter Location Number: "),
+            "vital_number": input("Enter Vital Number: "),
+            "agent_bank": input("Enter Agent Bank: "),
+            "agent_chain": input("Enter Agent Chain: ")
+        }
+
+        return Transaction(amount, currency, card_number, expiry_date, cvv, customer_id, var_sheet=var_sheet)
 
     def process_transaction(self, transaction, platform="tsys"):
         """Processes a transaction using the specified payment processor."""
