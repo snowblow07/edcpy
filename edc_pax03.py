@@ -43,5 +43,4 @@ if __name__ == "__main__":
     send_transaction(PAX_IP, PAX_PORT, AMOUNT)
 
 # 
-# CONNECTION ESTABLISHED SUCCESSFULLY!!
-# URRA!!!
+# CONNECTION ESTABLISHED SUCCESSFULLY!
